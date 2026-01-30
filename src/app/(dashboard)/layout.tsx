@@ -24,6 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import Image from "next/image";
 
 const sidebarItems = [
   { href: "/student/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -41,9 +42,9 @@ export default function DashboardLayout({
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen flex-col lg:flex-row bg-background">
+    <div className="flex min-h-screen flex-col lg:flex-row bg-background border-gray-300">
       {/* Mobile Sidebar Trigger */}
-      <header className="sticky top-0 z-30 flex h-16 items-center border-b bg-background/95 px-4 backdrop-blur lg:hidden">
+      <header className="sticky top-0 z-30 flex h-16 items-center border-b border-gray-300 bg-background/95 px-4 backdrop-blur lg:hidden">
         <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon" className="mr-2">
@@ -61,13 +62,13 @@ export default function DashboardLayout({
       </header>
 
       {/* Desktop Sidebar */}
-      <aside className="hidden w-64 border-r bg-muted/40 lg:block min-h-screen">
+      <aside className="hidden w-64 border-r bg-muted/40 lg:block min-h-screen border-gray-300">
         <SidebarContent pathname={pathname} />
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto">
-        <div className="flex items-center justify-end p-4 border-b">
+      <main className="flex-1 overflow-y-auto border-gray-300 ">
+        <div className="flex items-center justify-end p-4 border-b border-gray-300">
           <UserNav />
         </div>
         <div className="p-4 lg:p-8">{children}</div>
@@ -79,10 +80,16 @@ export default function DashboardLayout({
 function SidebarContent({ pathname }: { pathname: string }) {
   return (
     <div className="flex h-full flex-col gap-2">
-      <div className="flex h-16 items-center border-b px-6">
-        <Link href="/" className="flex items-center gap-2 font-semibold">
-          <GraduationCap className="h-6 w-6 text-primary" />
-          <span>PPDB Methodists 1</span>
+      <div className="flex h-16 items-center border-b border-gray-300 px-6">
+        <Link href="/" className="flex items-center font-semibold">
+          <Image
+            src="/logo.svg"
+            alt="Logo"
+            width={32}
+            height={32}
+            className="h-10 w-10"
+          />
+          <span>PPDB Methodist 1</span>
         </Link>
       </div>
       <div className="flex-1 overflow-auto py-2">
@@ -108,7 +115,7 @@ function SidebarContent({ pathname }: { pathname: string }) {
           })}
         </nav>
       </div>
-      <div className="mt-auto p-4 border-t">
+      <div className="mt-auto p-4 border-t border-gray-300">
         <div className="bg-primary/10 p-4 rounded-lg">
           <h4 className="font-semibold text-primary">Butuh Bantuan?</h4>
           <p className="text-xs text-muted-foreground mt-1">

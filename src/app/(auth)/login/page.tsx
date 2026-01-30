@@ -6,18 +6,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Label } from "@radix-ui/react-label";
-import { Loader2 } from "lucide-react";
-import { useState } from "react";
+import { Loader2, Mail, Lock } from "lucide-react";
 import toast from "react-hot-toast";
+import { useMutation } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import api from "@/lib/axios";
 
 const loginSchema = z.object({
   email: z.string().email("Email tidak valid"),
@@ -27,7 +21,7 @@ const loginSchema = z.object({
 type LoginForm = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
-  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
 
   const {
     register,
@@ -37,22 +31,46 @@ export default function LoginPage() {
     resolver: zodResolver(loginSchema),
   });
 
-  async function onSubmit(data: LoginForm) {
-    setIsLoading(true);
-    // TODO: Implement actual login logic
-    await new Promise((resolve) => setTimeout(resolve, 2000)); // Simulate API
-    toast.success("Berhasil masuk!");
-    setIsLoading(false);
-  }
+  const loginMutation = useMutation({
+    mutationFn: async (data: LoginForm) => {
+      const response = await api.post("/auth/login", data);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      toast.success("Berhasil masuk!");
+      // Redirect based on role or default to student dashboard
+      // Ideally we check role from response data
+      if (data.user?.role === "admin") {
+        router.push("/admin/dashboard");
+      } else {
+        router.push("/student/dashboard");
+      }
+    },
+    onError: (error: any) => {
+      const message =
+        error.response?.data?.message ||
+        "Gagal masuk. Periksa kredensial anda.";
+      toast.error(message);
+    },
+  });
+
+  const onSubmit = (data: LoginForm) => {
+    loginMutation.mutate(data);
+  };
+
+  const isLoading = loginMutation.isPending;
 
   return (
     <>
-      <div className="flex flex-col space-y-2 text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Selamat Datang Kembali
+      <div className="flex flex-col space-y-2 text-left">
+        <h1 className="text-3xl font-bold tracking-tight text-white dark:text-gray-100">
+          Selamat Datang{" "}
+          <span className="animate-bounce transition-all duration-500">👋</span>
         </h1>
-        <p className="text-sm text-muted-foreground">
-          Masukan email dan password anda untuk masuk ke sistem PPDB
+        <p className="text-sm text-white dark:text-gray-100">
+          Anda memasuki sistem Penerimaan Peserta Didik Baru. <br />
+          Masukan kredensial akun anda untuk mengakses sistem atau daftar
+          terlebih dahulu
         </p>
       </div>
 
@@ -60,75 +78,93 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit(onSubmit)}>
           <div className="grid gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                placeholder="nama@contoh.com"
-                type="email"
-                disabled={isLoading}
-                {...register("email")}
-                className={
-                  errors.email
-                    ? "border-destructive focus-visible:ring-destructive"
-                    : ""
-                }
-              />
+              <Label htmlFor="email" className="sr-only">
+                Email
+              </Label>
+              <div className="relative">
+                <div className="absolute left-3 top-3 text-white z-10">
+                  <Mail className="h-5 w-5 text-blue-950 z-10" />
+                </div>
+                <Input
+                  id="email"
+                  placeholder="nama@contoh.com"
+                  type="email"
+                  disabled={isLoading}
+                  {...register("email")}
+                  className={`pl-10 h-11 text-white ${
+                    errors.email
+                      ? "border-destructive focus-visible:ring-destructive bg-red-400"
+                      : "border-gray-200 dark:border-gray-800 focus-visible:ring-blue-600"
+                  }`}
+                />
+              </div>
               {errors.email && (
-                <p className="text-xs text-destructive">
+                <p className="text-xs text-destructive ml-1">
                   {errors.email.message}
                 </p>
               )}
             </div>
 
             <div className="grid gap-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">Password</Label>
+              <div className="relative">
+                <div className="absolute left-3 top-3 text-white z-10">
+                  <Lock className="h-5 w-5 text-blue-950 z-10" />
+                </div>
+                <Input
+                  id="password"
+                  placeholder="Password"
+                  type="password"
+                  disabled={isLoading}
+                  {...register("password")}
+                  className={`pl-10 h-11  text-white ${
+                    errors.password
+                      ? "border-destructive focus-visible:ring-destructive"
+                      : "border-gray-200 dark:border-gray-800 focus-visible:ring-blue-600"
+                  }`}
+                />
+              </div>
+              <div className="flex justify-end">
                 <Link
                   href="/forgot-password"
-                  className="text-sm font-medium text-primary hover:underline"
+                  className="text-xs font-medium text-blue-600 hover:text-blue-500 hover:underline"
                 >
                   Lupa password?
                 </Link>
               </div>
-              <Input
-                id="password"
-                type="password"
-                disabled={isLoading}
-                {...register("password")}
-                className={
-                  errors.password
-                    ? "border-destructive focus-visible:ring-destructive"
-                    : ""
-                }
-              />
               {errors.password && (
-                <p className="text-xs text-destructive">
+                <p className="text-xs text-destructive ml-1">
                   {errors.password.message}
                 </p>
               )}
             </div>
 
-            <Button disabled={isLoading} className="w-full">
+            <Button
+              disabled={isLoading}
+              className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-md transition-all hover:shadow-lg"
+            >
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Masuk
+              Masuk Sekarang
             </Button>
           </div>
         </form>
 
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t" />
+        <div className="relative flex items-center">
+          <div className="w-full flex items-center">
+            <span className="w-full border-t border-gray-200 dark:border-gray-800" />
           </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-background px-2 text-muted-foreground">
-              Atau belum punya akun?
+          <div className="relative flex justify-center text-xs uppercase w-full text-nowrap">
+            <span className="text-white dark:bg-zinc-950 px-2">
+              Belum punya akun?
             </span>
+          </div>
+          <div className="w-full flex items-center">
+            <span className="w-full border-t border-gray-200 dark:border-gray-800" />
           </div>
         </div>
 
         <Link
           href="/register"
-          className="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-8 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+          className="inline-flex h-11 items-center justify-center rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-white px-8 text-sm font-medium shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-200 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-600 disabled:pointer-events-none disabled:opacity-50"
         >
           Daftar Akun Baru
         </Link>

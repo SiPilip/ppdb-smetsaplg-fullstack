@@ -7,9 +7,11 @@ import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@radix-ui/react-label";
-import { Loader2 } from "lucide-react";
-import { useState } from "react";
+import { Loader2, User, Mail, Phone, Lock, Key } from "lucide-react";
 import toast from "react-hot-toast";
+import { useMutation } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import api from "@/lib/axios";
 
 const registerSchema = z
   .object({
@@ -33,32 +35,65 @@ const registerSchema = z
 type RegisterForm = z.infer<typeof registerSchema>;
 
 export default function RegisterPage() {
-  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
 
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors },
   } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
   });
 
-  async function onSubmit(data: RegisterForm) {
-    setIsLoading(true);
-    // TODO: Implement actual registration logic
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    toast.success("Pendaftaran berhasil! Silakan cek WA untuk OTP.");
-    setIsLoading(false);
-  }
+  const registerMutation = useMutation({
+    mutationFn: async (data: RegisterForm) => {
+      // Map form data to API expectations (fullName -> name)
+      const payload = {
+        name: data.fullName,
+        email: data.email,
+        phoneNumber: data.phoneNumber,
+        password: data.password,
+      };
+      const response = await api.post("/auth/register", payload);
+      return response.data;
+    },
+    onSuccess: () => {
+      toast.success("Pendaftaran berhasil! Silakan login.");
+      router.push("/login");
+    },
+    onError: (error: any) => {
+      const message =
+        error.response?.data?.message || "Terjadi kesalahan saat mendaftar.";
+      toast.error(message);
+
+      // Handle server-side validation errors if they exist and are mapped correctly
+      if (error.response?.data?.errors) {
+        error.response.data.errors.forEach((err: any) => {
+          // This assumes the server returns array of issues similar to Zod
+          const path = err.path[0];
+          if (path) {
+            setError(path as any, { message: err.message });
+          }
+        });
+      }
+    },
+  });
+
+  const onSubmit = (data: RegisterForm) => {
+    registerMutation.mutate(data);
+  };
+
+  const isLoading = registerMutation.isPending;
 
   return (
     <>
-      <div className="flex flex-col space-y-2 text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Buat Akun PPDB
+      <div className="flex flex-col space-y-2 text-left">
+        <h1 className="text-3xl font-bold tracking-tight text-white dark:text-gray-100">
+          Buat Akun Baru
         </h1>
-        <p className="text-sm text-muted-foreground">
-          Daftar untuk memulai proses penerimaan siswa baru
+        <p className="text-sm text-white dark:text-gray-400">
+          Bergabunglah dengan komunitas kami untuk memulai
         </p>
       </div>
 
@@ -66,129 +101,172 @@ export default function RegisterPage() {
         <form onSubmit={handleSubmit(onSubmit)}>
           <div className="grid gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="fullName">Nama Lengkap Siswa</Label>
-              <Input
-                id="fullName"
-                placeholder="Cth: Budi Santoso"
-                disabled={isLoading}
-                {...register("fullName")}
-                className={
-                  errors.fullName
-                    ? "border-destructive focus-visible:ring-destructive"
-                    : ""
-                }
-              />
+              <Label htmlFor="fullName" className="sr-only">
+                Nama Lengkap Siswa
+              </Label>
+              <div className="relative">
+                <div className="absolute left-3 top-3 text-white z-10">
+                  <User className="h-5 w-5 text-blue-950 z-10" />
+                </div>
+                <Input
+                  id="fullName"
+                  placeholder="Nama Lengkap Siswa"
+                  disabled={isLoading}
+                  {...register("fullName")}
+                  className={`pl-10 h-11 bg-white text-white ${
+                    errors.fullName
+                      ? "border-destructive focus-visible:ring-destructive bg-red-50"
+                      : "border-gray-200 focus-visible:ring-blue-600"
+                  }`}
+                />
+              </div>
               {errors.fullName && (
-                <p className="text-xs text-destructive">
+                <p className="text-xs text-destructive ml-1">
                   {errors.fullName.message}
                 </p>
               )}
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                placeholder="nama@contoh.com"
-                type="email"
-                disabled={isLoading}
-                {...register("email")}
-                className={
-                  errors.email
-                    ? "border-destructive focus-visible:ring-destructive"
-                    : ""
-                }
-              />
+              <Label htmlFor="email" className="sr-only">
+                Email
+              </Label>
+              <div className="relative">
+                <div className="absolute left-3 top-3 text-white z-10">
+                  <Mail className="h-5 w-5 text-blue-950 z-10" />
+                </div>
+                <Input
+                  id="email"
+                  placeholder="nama@contoh.com"
+                  type="email"
+                  disabled={isLoading}
+                  {...register("email")}
+                  className={`pl-10 h-11 bg-white text-white ${
+                    errors.email
+                      ? "border-destructive focus-visible:ring-destructive bg-red-50"
+                      : "border-gray-200 focus-visible:ring-blue-600"
+                  }`}
+                />
+              </div>
               {errors.email && (
-                <p className="text-xs text-destructive">
+                <p className="text-xs text-destructive ml-1">
                   {errors.email.message}
                 </p>
               )}
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="phoneNumber">Nomor WhatsApp</Label>
-              <Input
-                id="phoneNumber"
-                placeholder="0812..."
-                type="tel"
-                disabled={isLoading}
-                {...register("phoneNumber")}
-                className={
-                  errors.phoneNumber
-                    ? "border-destructive focus-visible:ring-destructive"
-                    : ""
-                }
-              />
+              <Label htmlFor="phoneNumber" className="sr-only">
+                Nomor WhatsApp
+              </Label>
+              <div className="relative">
+                <div className="absolute left-3 top-3 text-white z-10">
+                  <Phone className="h-5 w-5 text-blue-950 z-10" />
+                </div>
+                <Input
+                  id="phoneNumber"
+                  placeholder="Nomor WhatsApp (08...)"
+                  type="tel"
+                  disabled={isLoading}
+                  {...register("phoneNumber")}
+                  className={`pl-10 h-11 bg-white text-white ${
+                    errors.phoneNumber
+                      ? "border-destructive focus-visible:ring-destructive bg-red-50"
+                      : "border-gray-200 focus-visible:ring-blue-600"
+                  }`}
+                />
+              </div>
               {errors.phoneNumber && (
-                <p className="text-xs text-destructive">
+                <p className="text-xs text-destructive ml-1">
                   {errors.phoneNumber.message}
                 </p>
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="grid gap-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  disabled={isLoading}
-                  {...register("password")}
-                  className={
-                    errors.password
-                      ? "border-destructive focus-visible:ring-destructive"
-                      : ""
-                  }
-                />
+                <Label htmlFor="password" className="sr-only">
+                  Password
+                </Label>
+                <div className="relative">
+                  <div className="absolute left-3 top-3 text-white z-10">
+                    <Lock className="h-5 w-5 text-blue-950 z-10" />
+                  </div>
+                  <Input
+                    id="password"
+                    placeholder="Password"
+                    type="password"
+                    disabled={isLoading}
+                    {...register("password")}
+                    className={`pl-10 h-11 bg-white text-white ${
+                      errors.password
+                        ? "border-destructive focus-visible:ring-destructive bg-red-50"
+                        : "border-gray-200 focus-visible:ring-blue-600"
+                    }`}
+                  />
+                </div>
                 {errors.password && (
-                  <p className="text-xs text-destructive">
+                  <p className="text-xs text-destructive ml-1">
                     {errors.password.message}
                   </p>
                 )}
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="confirmPassword">Ulangi Password</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  disabled={isLoading}
-                  {...register("confirmPassword")}
-                  className={
-                    errors.confirmPassword
-                      ? "border-destructive focus-visible:ring-destructive"
-                      : ""
-                  }
-                />
+                <Label htmlFor="confirmPassword" className="sr-only">
+                  Ulangi Password
+                </Label>
+                <div className="relative">
+                  <div className="absolute left-3 top-3 text-white z-10">
+                    <Key className="h-5 w-5 text-blue-950 z-10" />
+                  </div>
+                  <Input
+                    id="confirmPassword"
+                    placeholder="Ulangi Password"
+                    type="password"
+                    disabled={isLoading}
+                    {...register("confirmPassword")}
+                    className={`pl-10 h-11 bg-white text-white ${
+                      errors.confirmPassword
+                        ? "border-destructive focus-visible:ring-destructive bg-red-50"
+                        : "border-gray-200 focus-visible:ring-blue-600"
+                    }`}
+                  />
+                </div>
                 {errors.confirmPassword && (
-                  <p className="text-xs text-destructive">
+                  <p className="text-xs text-destructive ml-1">
                     {errors.confirmPassword.message}
                   </p>
                 )}
               </div>
             </div>
 
-            <Button disabled={isLoading} className="w-full mt-2">
+            <Button
+              disabled={isLoading}
+              className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-md transition-all hover:shadow-lg mt-2"
+            >
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Daftar Sekarang
             </Button>
           </div>
         </form>
 
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t" />
+        <div className="relative flex items-center">
+          <div className="w-full flex items-center">
+            <span className="w-full border-t border-gray-200 dark:border-gray-800" />
           </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-background px-2 text-muted-foreground">
+          <div className="relative flex justify-center text-xs uppercase w-full text-nowrap">
+            <span className="text-white dark:bg-zinc-950 px-2">
               Sudah punya akun?
             </span>
+          </div>
+          <div className="w-full flex items-center">
+            <span className="w-full border-t border-gray-200 dark:border-gray-800" />
           </div>
         </div>
 
         <Link
           href="/login"
-          className="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-8 text-sm font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+          className="inline-flex h-11 items-center justify-center rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 px-8 text-sm font-medium shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-zinc-800 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-600 disabled:pointer-events-none disabled:opacity-50"
         >
           Masuk ke Akun
         </Link>
