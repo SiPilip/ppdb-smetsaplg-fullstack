@@ -1,0 +1,113 @@
+services:
+  # ─────────────────────────────────────────────
+  # MongoDB
+  # ─────────────────────────────────────────────
+  mongodb:
+    image: mongo:6-jammy
+    container_name: ppdb_mongodb
+    restart: unless-stopped
+    # TIDAK expose port ke host – hanya internal network
+    # Untuk keamanan: MongoDB tidak bisa diakses dari luar
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DB_NAME}
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    networks:
+      - app_network
+    # Batasi memory untuk VPS 1GB RAM
+    deploy:
+      resources:
+        limits:
+          memory: 300M
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # ─────────────────────────────────────────────
+  # Next.js App
+  # ─────────────────────────────────────────────
+  nextjs:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ppdb_nextjs
+    restart: unless-stopped
+    # TIDAK expose port ke host – hanya lewat Nginx
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASSWORD}@mongodb:27017/${MONGO_DB_NAME}?authSource=admin
+      - JWT_SECRET=${JWT_SECRET}
+      - FONNTE_TOKEN=${FONNTE_TOKEN}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+      - PORT=3005
+    volumes:
+      # Volume untuk file upload (persist antar restart)
+      - uploads_data:/app/public/uploads
+    networks:
+      - app_network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 400M
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3005/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ─────────────────────────────────────────────
+  # Nginx (Reverse Proxy)
+  # ─────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: ppdb_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      # Untuk SSL nanti (Let's Encrypt)
+      - certbot_certs:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+    networks:
+      - app_network
+    depends_on:
+      - nextjs
+    deploy:
+      resources:
+        limits:
+          memory: 50M
+
+# ─────────────────────────────────────────────
+# Volumes (data persisten)
+# ─────────────────────────────────────────────
+volumes:
+  mongodb_data:
+    driver: local
+  mongodb_config:
+    driver: local
+  uploads_data:
+    driver: local
+  certbot_certs:
+    driver: local
+  certbot_www:
+    driver: local
+
+# ─────────────────────────────────────────────
+# Network internal
+# ─────────────────────────────────────────────
+networks:
+  app_network:
+    driver: bridge

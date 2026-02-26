@@ -1,0 +1,45 @@
+# Dependencies
+node_modules
+npm-debug.log*
+
+# Next.js build output
+.next
+out
+
+# Environment files - JANGAN masuk image!
+.env
+.env.*
+.env.local
+.env.development
+.env.production
+
+# Git
+.git
+.gitignore
+
+# Docker files sendiri
+Dockerfile
+docker-compose.yml
+docker-compose.*.yml
+
+# Editor / IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Uploads (akan di-mount via volume)
+public/uploads
+
+# Debug & log
+*.log
+coverage
+
+# Docs & misc
+README.md
+*.md
+.yarn

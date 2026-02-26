@@ -1,0 +1,45 @@
+name: 🚀 Deploy to VPS
+
+on:
+  push:
+    branches:
+      - main # Auto-deploy setiap push ke branch main
+
+jobs:
+  deploy:
+    name: Deploy via SSH
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout kode ─────────────────────────────────
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. SSH ke VPS & Deploy ───────────────────────────
+      - name: 🐳 Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          script: |
+            set -e  # Stop jika ada error
+
+            echo "📂 Masuk ke direktori project..."
+            cd ~/ppdb-smetsaplg
+
+            echo "⬇️  Pull kode terbaru dari main..."
+            git pull origin main
+
+            echo "🔨 Build ulang container Next.js..."
+            docker compose --env-file .env.production up -d --build nextjs
+
+            echo "🧹 Cleanup Docker images lama..."
+            docker image prune -f
+
+            echo "✅ Deploy selesai!"
+            docker compose ps
+
+  # ── Optional: Notifikasi status deploy ───────────────────
+  # (Bisa ditambahkan Slack/email notification di sini nanti)
