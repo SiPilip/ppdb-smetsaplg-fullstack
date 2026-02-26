@@ -7,21 +7,31 @@ const UserSchema = new Schema({
   name: { type: String, required: true },
   phoneNumber: { type: String, required: true, unique: true },
   role: { type: String, enum: ["student", "admin"], default: "student" },
+
+  // OTP & Verification
+  otp: { type: String },
+  otpExpires: { type: Date },
+  isPhoneVerified: { type: Boolean, default: false },
+
   createdAt: { type: Date, default: Date.now },
 });
+
+// Force recompilation of User model if fields are missing (Dev only Hot Reload fix)
+if (models.User && !models.User.schema.paths.otp) {
+  delete models.User;
+}
 
 export const User = models.User || model("User", UserSchema);
 
 // --- Settings Schema (Admin Config) ---
 const SettingsSchema = new Schema({
-  waveName: { type: String, default: "Gelombang 1" },
-  waveStart: { type: Date },
-  waveEnd: { type: Date },
-  // Multiple fee groups (Golongan)
-  feeGroups: [
+  // Waves Array: Multiple periods, each with specific fees
+  waves: [
     {
-      name: { type: String, required: true }, // e.g. "Reguler", "Prestasi"
-      description: String,
+      name: { type: String, required: true }, // e.g., "Gelombang 1"
+      startDate: { type: Date },
+      endDate: { type: Date },
+      // Direct Fee Items (Flattened)
       items: {
         registration: { type: Number, default: 0 },
         participation: { type: Number, default: 0 },
@@ -47,14 +57,15 @@ export const Settings = models.Settings || model("Settings", SettingsSchema);
 const RegistrationSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
   registrationNumber: { type: String, unique: true }, // Auto-generated e.g. PPDB-2025-001
+
+  // Wave & Fee tracking
+  wave: { type: String }, // Stores the Wave Name or ID at time of registration
+
   status: {
     type: String,
     enum: ["draft", "pending", "verified", "rejected"], // pending = sudah bayar & upload, verified = diterima
     default: "draft",
   },
-
-  // Fee Group Selection
-  golongan: { type: String, default: "Reguler" },
 
   // Completeness Flags
   checklist: {
@@ -116,6 +127,16 @@ const RegistrationSchema = new Schema({
   payment: {
     totalAmount: Number,
     verifiedAt: Date,
+  },
+
+  // Granular Timestamps for Admin Review
+  timestamps: {
+    biodata: Date,
+    documents: {
+      familyCard: Date,
+      birthCertificate: Date,
+      paymentProof: Date,
+    },
   },
 
   createdAt: { type: Date, default: Date.now },

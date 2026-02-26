@@ -2,16 +2,8 @@
 
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/axios";
-import { Loader2, ArrowLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import Link from "next/link";
+import { Loader2 } from "lucide-react";
+import { formatCurrency } from "@/lib/utils";
 import {
   Table,
   TableBody,
@@ -20,45 +12,40 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { BANK_INFO } from "@/lib/constants";
 
 export default function PaymentPage() {
-  // Fetch Student Profile to get 'golongan'
-  const { data: profileData, isLoading: isProfileLoading } = useQuery({
-    queryKey: ["studentProfile"],
+  const { data: profileData } = useQuery({
+    queryKey: ["profile"],
     queryFn: async () => {
       const response = await api.get("/student/profile");
       return response.data;
     },
   });
 
-  // Fetch Settings to get 'feeGroups'
-  const { data: settingsData, isLoading: isSettingsLoading } = useQuery({
+  const { data: settingsData } = useQuery({
     queryKey: ["settings"],
     queryFn: async () => {
       const response = await api.get("/settings");
       return response.data;
     },
+    staleTime: 1000 * 60 * 5,
   });
 
-  if (isProfileLoading || isSettingsLoading) {
+  // Ensure data availability
+  if (!profileData || !settingsData) {
     return (
-      <div className="flex justify-center p-8">
-        <Loader2 className="animate-spin" />
+      <div className="flex justify-center py-10">
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
 
-  const studentGolongan = profileData?.registration?.golongan || "Reguler";
-  const feeGroups = settingsData?.feeGroups || [];
+  const studentWaveName = profileData?.registration?.wave || "Gelombang 1"; // Default
+  const waves = settingsData?.waves || [];
 
-  // Find the fee group that matches the student's golongan
-  // If not found, default to the first one or show error
-  const activeFeeGroup =
-    feeGroups.find((g: any) => g.name === studentGolongan) || feeGroups[0];
-  const items = activeFeeGroup?.items || {};
-
-  // Map of keys to readable labels
-  const labels: Record<string, string> = {
+  const labels: any = {
     registration: "Uang Pendaftaran",
     participation: "Dana Partisipasi Pendidikan",
     uniformSport: "Seragam Olah Raga/Badge/Kaos Kaki",
@@ -74,78 +61,102 @@ export default function PaymentPage() {
     tuition: "Uang Sekolah dan Uang Ujian (SPP)",
   };
 
-  const total = Object.values(items).reduce(
-    (acc: number, val: any) => acc + (Number(val) || 0),
-    0,
-  );
-
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      minimumFractionDigits: 0,
-    }).format(val);
-  };
-
   return (
-    <div className="container max-w-4xl mx-auto py-6 space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href="/student/dashboard">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
-        <h2 className="text-3xl font-bold tracking-tight">
-          Rincian Pembayaran
-        </h2>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-2">
+        <h2 className="text-3xl font-bold tracking-tight">Rincian Biaya</h2>
+        <p className="text-muted-foreground">
+          Berikut adalah rincian biaya pendaftaran untuk setiap gelombang.
+          <br />
+          Paket Anda saat ini adalah:{" "}
+          <span className="font-bold text-primary">{studentWaveName}</span>
+        </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Biaya Pendidikan - Golongan {studentGolongan}</CardTitle>
-          <CardDescription>
-            Berikut adalah rincian biaya yang harus dibayarkan untuk Tahun
-            Ajaran 2025/2026.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[50%]">Keterangan</TableHead>
-                  <TableHead className="text-right">Biaya</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {Object.entries(items).map(([key, value]) => (
-                  <TableRow key={key}>
-                    <TableCell className="font-medium">
-                      {labels[key] || key}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {formatCurrency(Number(value))}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                <TableRow className="bg-muted/50 font-bold">
-                  <TableCell>Total Biaya</TableCell>
-                  <TableCell className="text-right text-lg">
-                    {formatCurrency(total)}
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
+      <div className="grid gap-6 xl:grid-cols-2">
+        {waves.map((wave: any, index: number) => {
+          const isAssigned = wave.name === studentWaveName;
+          const items = wave.items || {};
+          const total = Object.values(items).reduce(
+            (acc: any, curr: any) => acc + Number(curr),
+            0,
+          ) as number;
 
-          <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
-            <strong>Catatan Pembayaran:</strong> <br />
-            Silahkan transfer total biaya pendaftaran (Uang Pendaftaran:{" "}
-            {formatCurrency(Number(items.registration || 0))}) ke Rekening{" "}
-            <strong>BCA 8888-9999-00</strong> a.n Yayasan Methodist. <br />
-            Biaya lainnya dapat diangsur sesuai ketentuan sekolah setelah siswa
-            diterima.
+          return (
+            <Card
+              key={index}
+              className={`transition-all duration-300 ${isAssigned ? "border-4 border-primary shadow-lg scale-[1.01]" : "border shadow-sm opacity-80 hover:opacity-100"}`}
+            >
+              <CardHeader className={isAssigned ? "bg-primary/10" : ""}>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle>{wave.name}</CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      {new Date(wave.startDate).toLocaleDateString("id-ID")} -{" "}
+                      {new Date(wave.endDate).toLocaleDateString("id-ID")}
+                    </p>
+                  </div>
+                  {isAssigned && (
+                    <span className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1 rounded-full">
+                      Paket Anda
+                    </span>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[60%]">Keterangan</TableHead>
+                      <TableHead className="text-right">Biaya</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Object.entries(items).map(([key, value]) => (
+                      <TableRow key={key} className="h-8">
+                        <TableCell className="py-2 font-medium text-sm">
+                          {labels[key] || key}
+                        </TableCell>
+                        <TableCell className="py-2 text-right text-sm">
+                          {formatCurrency(Number(value))}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow className="bg-muted/50 font-bold">
+                      <TableCell>Total Biaya</TableCell>
+                      <TableCell className="text-right text-lg">
+                        {formatCurrency(total)}
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      <Card className="bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800">
+        <CardHeader>
+          <CardTitle className="text-blue-800 dark:text-blue-300">
+            Instruksi Pembayaran
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-blue-900 dark:text-blue-200">
+          <p>Silahkan transfer total biaya ke rekening berikut:</p>
+          <div className="font-bold text-lg my-2">
+            {BANK_INFO.BANK_NAME}: {BANK_INFO.ACCOUNT_NUMBER} (a.n.{" "}
+            {BANK_INFO.ACCOUNT_NAME})
           </div>
+          <p>
+            Setelah melakukan pembayaran, harap upload bukti transfer pada menu{" "}
+            <strong>Dokumen</strong>. Status pendaftaran akan berubah menjadi
+            "Diproses" setelah bukti diupload.
+          </p>
+          <p className="text-red-500">
+            <strong>Perhatian:</strong> Setiap pembayaran yang telah masuk ke
+            rekening diatas tidak dapat dikembalikan dengan alasan apapun.
+          </p>
         </CardContent>
       </Card>
     </div>

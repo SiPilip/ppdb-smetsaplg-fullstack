@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import { useIndonesiaRegions } from "@/hooks/useIndonesiaRegions";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Save } from "lucide-react";
+import { Loader2, Save, CloudOff } from "lucide-react";
 import toast from "react-hot-toast";
 
 import { Button } from "@/components/ui/button";
@@ -23,9 +24,10 @@ import {
 import { Separator } from "@/components/ui/separator";
 import api from "@/lib/axios";
 
+const DRAFT_KEY = "ppdb_biodata_draft";
+
 // Schema Validation
 const biodataSchema = z.object({
-  // Student Data
   student: z.object({
     fullName: z.string().min(1, "Nama lengkap wajib diisi"),
     gender: z.enum(["L", "P"]),
@@ -39,13 +41,12 @@ const biodataSchema = z.object({
       street: z.string().min(1, "Alamat jalan wajib diisi"),
       rt: z.string().optional(),
       rw: z.string().optional(),
-      village: z.string().min(1, "Kelurahan wajib diisi"), // Kelurahan
-      district: z.string().min(1, "Kecamatan wajib diisi"), // Kecamatan
+      village: z.string().min(1, "Kelurahan wajib diisi"),
+      district: z.string().min(1, "Kecamatan wajib diisi"),
       city: z.string().min(1, "Kota/Kabupaten wajib diisi"),
       province: z.string().min(1, "Provinsi wajib diisi"),
     }),
   }),
-  // Parent Data
   father: z
     .object({
       name: z.string().min(1, "Nama ayah wajib diisi"),
@@ -83,23 +84,46 @@ interface StudentBiodataFormProps {
 export function StudentBiodataForm({ initialData }: StudentBiodataFormProps) {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("personal");
+  const [hasDraft, setHasDraft] = useState(false);
+  const initialDataLoadedRef = useRef(false);
 
-  const getDefaultValues = (): Partial<BiodataFormValues> => {
-    const studentData = initialData?.registration?.student || {};
-    const userData = initialData?.user || {};
-    const fatherData = initialData?.registration?.father || {};
-    const motherData = initialData?.registration?.mother || {};
-    const guardianData = initialData?.registration?.guardian || {};
+  // Cascading address state — store selected IDs for chaining API calls
+  const [selectedProvinceId, setSelectedProvinceId] = useState("");
+  const [selectedCityId, setSelectedCityId] = useState("");
+  const [selectedDistrictId, setSelectedDistrictId] = useState("");
 
-    const formatDate = (dateString: string) =>
-      dateString ? new Date(dateString).toISOString().split("T")[0] : "";
+  const {
+    provinces,
+    cities,
+    districts,
+    villages,
+    loadingProvinces,
+    loadingCities,
+    loadingDistricts,
+    loadingVillages,
+    fetchProvinces,
+    fetchCities,
+    fetchDistricts,
+    fetchVillages,
+  } = useIndonesiaRegions();
+
+  const getDefaultValues = (source?: any): Partial<BiodataFormValues> => {
+    const data = source || initialData;
+    const studentData = data?.registration?.student || {};
+    const userData = data?.user || {};
+    const fatherData = data?.registration?.father || {};
+    const motherData = data?.registration?.mother || {};
+    const guardianData = data?.registration?.guardian || {};
+
+    const fmtDate = (d: string) =>
+      d ? new Date(d).toISOString().split("T")[0] : "";
 
     return {
       student: {
         fullName: studentData.fullName || userData.name || "",
         gender: studentData.gender || "L",
         birthPlace: studentData.birthPlace || "",
-        birthDate: formatDate(studentData.birthDate),
+        birthDate: fmtDate(studentData.birthDate),
         originSchool: studentData.originSchool || "",
         religion: studentData.religion || "",
         livingWith: studentData.livingWith || "",
@@ -116,14 +140,14 @@ export function StudentBiodataForm({ initialData }: StudentBiodataFormProps) {
       },
       father: {
         name: fatherData.name || "",
-        birthDate: formatDate(fatherData.birthDate),
+        birthDate: fmtDate(fatherData.birthDate),
         education: fatherData.education || "",
         job: fatherData.job || "",
         phone: fatherData.phone || "",
       },
       mother: {
         name: motherData.name || "",
-        birthDate: formatDate(motherData.birthDate),
+        birthDate: fmtDate(motherData.birthDate),
         education: motherData.education || "",
         job: motherData.job || "",
         phone: motherData.phone || "",
@@ -142,12 +166,44 @@ export function StudentBiodataForm({ initialData }: StudentBiodataFormProps) {
     defaultValues: getDefaultValues(),
   });
 
-  // Reset form when initialData loads
+  // On mount: load from localStorage if draft exists
   useEffect(() => {
-    if (initialData) {
-      form.reset(getDefaultValues());
+    if (initialData && !initialDataLoadedRef.current) {
+      initialDataLoadedRef.current = true;
+      const saved = localStorage.getItem(DRAFT_KEY);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          form.reset(parsed);
+          setHasDraft(true);
+        } catch {
+          form.reset(getDefaultValues());
+        }
+      } else {
+        form.reset(getDefaultValues());
+      }
     }
-  }, [initialData, form]);
+  }, [initialData]);
+
+  // Auto-save draft to localStorage whenever form values change
+  useEffect(() => {
+    const subscription = form.watch((values) => {
+      if (initialDataLoadedRef.current) {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(values));
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
+
+  const clearDraft = () => {
+    localStorage.removeItem(DRAFT_KEY);
+    setHasDraft(false);
+  };
+
+  const discardDraft = () => {
+    clearDraft();
+    form.reset(getDefaultValues());
+  };
 
   const mutation = useMutation({
     mutationFn: async (data: BiodataFormValues) => {
@@ -156,11 +212,11 @@ export function StudentBiodataForm({ initialData }: StudentBiodataFormProps) {
     },
     onSuccess: () => {
       toast.success("Biodata berhasil disimpan");
+      clearDraft();
       queryClient.invalidateQueries({ queryKey: ["studentProfile"] });
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || "Gagal menyimpan biodata");
-      console.error(error);
     },
   });
 
@@ -168,11 +224,54 @@ export function StudentBiodataForm({ initialData }: StudentBiodataFormProps) {
     mutation.mutate(data);
   }
 
+  function onInvalid(errs: any) {
+    const hasPersonalErrors = errs.student;
+    const hasParentErrors = errs.father || errs.mother;
+    const hasGuardianErrors = errs.guardian;
+
+    if (activeTab === "personal" && hasPersonalErrors) {
+      const firstMsg =
+        errs.student?.fullName?.message ||
+        errs.student?.birthPlace?.message ||
+        errs.student?.birthDate?.message ||
+        errs.student?.originSchool?.message ||
+        errs.student?.religion?.message ||
+        errs.student?.address?.street?.message ||
+        errs.student?.address?.village?.message ||
+        errs.student?.address?.district?.message ||
+        errs.student?.address?.city?.message ||
+        errs.student?.address?.province?.message ||
+        "Ada field yang belum diisi di tab Data Pribadi.";
+      toast.error(firstMsg);
+    } else if (activeTab === "parents" && hasParentErrors) {
+      const firstMsg =
+        errs.father?.name?.message ||
+        errs.mother?.name?.message ||
+        "Ada field yang belum diisi di tab Data Orang Tua.";
+      toast.error(firstMsg);
+    } else if (activeTab === "guardian" && hasGuardianErrors) {
+      toast.error("Ada field yang belum diisi di tab Data Wali.");
+    } else if (hasPersonalErrors) {
+      toast.error("Ada data yang belum lengkap di tab Data Pribadi.");
+    } else if (hasParentErrors) {
+      toast.error("Ada data yang belum lengkap di tab Data Orang Tua.");
+    }
+  }
+
   const { errors } = form.formState;
 
+  const tabHasError = {
+    personal: !!errors.student,
+    parents: !!(errors.father || errors.mother),
+    guardian: !!errors.guardian,
+  };
+
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-      <div className="flex items-center justify-between">
+    <form
+      onSubmit={form.handleSubmit(onSubmit, onInvalid)}
+      className="space-y-8"
+    >
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="space-y-1">
           <h2 className="text-2xl font-bold tracking-tight">
             Lengkapi Biodata
@@ -182,13 +281,29 @@ export function StudentBiodataForm({ initialData }: StudentBiodataFormProps) {
             (KK/Akta).
           </p>
         </div>
-        <Button type="submit" disabled={mutation.isPending}>
-          {mutation.isPending && (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        <div className="flex items-center gap-2">
+          {hasDraft && (
+            <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-md px-3 py-1.5">
+              <CloudOff className="h-3.5 w-3.5" />
+              <span>Draft belum tersimpan ke server</span>
+              <button
+                type="button"
+                onClick={discardDraft}
+                className="underline hover:text-amber-800 ml-1"
+              >
+                Buang
+              </button>
+            </div>
           )}
-          <Save className="mr-2 h-4 w-4" />
-          Simpan Data
-        </Button>
+          <Button type="submit" disabled={mutation.isPending}>
+            {mutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="mr-2 h-4 w-4" />
+            )}
+            Simpan Data
+          </Button>
+        </div>
       </div>
 
       <Tabs
@@ -197,8 +312,18 @@ export function StudentBiodataForm({ initialData }: StudentBiodataFormProps) {
         className="space-y-4"
       >
         <TabsList>
-          <TabsTrigger value="personal">Data Pribadi</TabsTrigger>
-          <TabsTrigger value="parents">Data Orang Tua</TabsTrigger>
+          <TabsTrigger
+            value="personal"
+            className={tabHasError.personal ? "text-destructive" : ""}
+          >
+            Data Pribadi {tabHasError.personal && "⚠"}
+          </TabsTrigger>
+          <TabsTrigger
+            value="parents"
+            className={tabHasError.parents ? "text-destructive" : ""}
+          >
+            Data Orang Tua {tabHasError.parents && "⚠"}
+          </TabsTrigger>
           <TabsTrigger value="guardian">Data Wali (Opsional)</TabsTrigger>
         </TabsList>
 
@@ -212,7 +337,6 @@ export function StudentBiodataForm({ initialData }: StudentBiodataFormProps) {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Full Name & Gender */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="student.fullName">Nama Lengkap</Label>
@@ -231,21 +355,15 @@ export function StudentBiodataForm({ initialData }: StudentBiodataFormProps) {
                   <Label htmlFor="student.gender">Jenis Kelamin</Label>
                   <select
                     id="student.gender"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     {...form.register("student.gender")}
                   >
                     <option value="L">Laki-laki</option>
                     <option value="P">Perempuan</option>
                   </select>
-                  {errors.student?.gender && (
-                    <p className="text-destructive text-xs">
-                      {errors.student.gender.message}
-                    </p>
-                  )}
                 </div>
               </div>
 
-              {/* Birth Place/Date */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="student.birthPlace">Tempat Lahir</Label>
@@ -275,7 +393,6 @@ export function StudentBiodataForm({ initialData }: StudentBiodataFormProps) {
                 </div>
               </div>
 
-              {/* Origin School & Religion */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="student.originSchool">Asal Sekolah</Label>
@@ -294,7 +411,7 @@ export function StudentBiodataForm({ initialData }: StudentBiodataFormProps) {
                   <Label htmlFor="student.religion">Agama</Label>
                   <select
                     id="student.religion"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     {...form.register("student.religion")}
                   >
                     <option value="">Pilih Agama</option>
@@ -314,7 +431,6 @@ export function StudentBiodataForm({ initialData }: StudentBiodataFormProps) {
                 </div>
               </div>
 
-              {/* Other Info */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="student.livingWith">Tinggal Bersama</Label>
@@ -340,6 +456,8 @@ export function StudentBiodataForm({ initialData }: StudentBiodataFormProps) {
               <Separator />
               <div className="space-y-4">
                 <h3 className="font-semibold text-lg">Alamat Lengkap</h3>
+
+                {/* Street */}
                 <div className="space-y-2">
                   <Label htmlFor="student.address.street">Alamat Jalan</Label>
                   <Textarea
@@ -354,7 +472,160 @@ export function StudentBiodataForm({ initialData }: StudentBiodataFormProps) {
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {/* Cascading selects: Province → City → District → Village */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Provinsi */}
+                  <div className="space-y-2">
+                    <Label>Provinsi</Label>
+                    <select
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60"
+                      value={selectedProvinceId}
+                      onFocus={() => fetchProvinces()}
+                      onChange={(e) => {
+                        const opt = e.target.options[e.target.selectedIndex];
+                        setSelectedProvinceId(e.target.value);
+                        setSelectedCityId("");
+                        setSelectedDistrictId("");
+                        form.setValue(
+                          "student.address.province",
+                          opt.text === "-- Pilih Provinsi --" ? "" : opt.text,
+                        );
+                        form.setValue("student.address.city", "");
+                        form.setValue("student.address.district", "");
+                        form.setValue("student.address.village", "");
+                        if (e.target.value) fetchCities(e.target.value);
+                      }}
+                    >
+                      <option value="">
+                        {loadingProvinces
+                          ? "Memuat..."
+                          : "-- Pilih Provinsi --"}
+                      </option>
+                      {provinces.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.nama}
+                        </option>
+                      ))}
+                    </select>
+                    {errors.student?.address?.province && (
+                      <p className="text-destructive text-xs">
+                        {errors.student.address.province.message}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Kab/Kota */}
+                  <div className="space-y-2">
+                    <Label>Kota / Kabupaten</Label>
+                    <select
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60"
+                      value={selectedCityId}
+                      disabled={!selectedProvinceId || loadingCities}
+                      onChange={(e) => {
+                        const opt = e.target.options[e.target.selectedIndex];
+                        setSelectedCityId(e.target.value);
+                        setSelectedDistrictId("");
+                        form.setValue(
+                          "student.address.city",
+                          opt.text === "-- Pilih Kota/Kabupaten --"
+                            ? ""
+                            : opt.text,
+                        );
+                        form.setValue("student.address.district", "");
+                        form.setValue("student.address.village", "");
+                        if (e.target.value) fetchDistricts(e.target.value);
+                      }}
+                    >
+                      <option value="">
+                        {loadingCities
+                          ? "Memuat..."
+                          : "-- Pilih Kota/Kabupaten --"}
+                      </option>
+                      {cities.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.nama}
+                        </option>
+                      ))}
+                    </select>
+                    {errors.student?.address?.city && (
+                      <p className="text-destructive text-xs">
+                        {errors.student.address.city.message}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Kecamatan */}
+                  <div className="space-y-2">
+                    <Label>Kecamatan</Label>
+                    <select
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60"
+                      value={selectedDistrictId}
+                      disabled={!selectedCityId || loadingDistricts}
+                      onChange={(e) => {
+                        const opt = e.target.options[e.target.selectedIndex];
+                        setSelectedDistrictId(e.target.value);
+                        form.setValue(
+                          "student.address.district",
+                          opt.text === "-- Pilih Kecamatan --" ? "" : opt.text,
+                        );
+                        form.setValue("student.address.village", "");
+                        if (e.target.value) fetchVillages(e.target.value);
+                      }}
+                    >
+                      <option value="">
+                        {loadingDistricts
+                          ? "Memuat..."
+                          : "-- Pilih Kecamatan --"}
+                      </option>
+                      {districts.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.nama}
+                        </option>
+                      ))}
+                    </select>
+                    {errors.student?.address?.district && (
+                      <p className="text-destructive text-xs">
+                        {errors.student.address.district.message}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Kelurahan / Desa */}
+                  <div className="space-y-2">
+                    <Label>Kelurahan / Desa</Label>
+                    <select
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60"
+                      disabled={!selectedDistrictId || loadingVillages}
+                      defaultValue=""
+                      onChange={(e) => {
+                        const opt = e.target.options[e.target.selectedIndex];
+                        form.setValue(
+                          "student.address.village",
+                          opt.text === "-- Pilih Kelurahan --" ? "" : opt.text,
+                        );
+                      }}
+                    >
+                      <option value="">
+                        {loadingVillages
+                          ? "Memuat..."
+                          : "-- Pilih Kelurahan --"}
+                      </option>
+                      {villages.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.nama}
+                        </option>
+                      ))}
+                    </select>
+                    {errors.student?.address?.village && (
+                      <p className="text-destructive text-xs">
+                        {errors.student.address.village.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* RT & RW — tetap manual */}
+                <div className="grid grid-cols-2 gap-4 max-w-xs">
                   <div className="space-y-2">
                     <Label>RT</Label>
                     <Input
@@ -369,58 +640,23 @@ export function StudentBiodataForm({ initialData }: StudentBiodataFormProps) {
                       placeholder="002"
                     />
                   </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <Label>Kelurahan</Label>
-                    <Input
-                      {...form.register("student.address.village")}
-                      placeholder="Kelurahan"
-                    />
-                    {errors.student?.address?.village && (
-                      <p className="text-destructive text-xs">
-                        {errors.student.address.village.message}
-                      </p>
-                    )}
-                  </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label>Kecamatan</Label>
-                    <Input
-                      {...form.register("student.address.district")}
-                      placeholder="Kecamatan"
-                    />
-                    {errors.student?.address?.district && (
-                      <p className="text-destructive text-xs">
-                        {errors.student.address.district.message}
-                      </p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Kota/Kabupaten</Label>
-                    <Input
-                      {...form.register("student.address.city")}
-                      placeholder="Kota"
-                    />
-                    {errors.student?.address?.city && (
-                      <p className="text-destructive text-xs">
-                        {errors.student.address.city.message}
-                      </p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Provinsi</Label>
-                    <Input
-                      {...form.register("student.address.province")}
-                      placeholder="Provinsi"
-                    />
-                    {errors.student?.address?.province && (
-                      <p className="text-destructive text-xs">
-                        {errors.student.address.province.message}
-                      </p>
-                    )}
-                  </div>
-                </div>
+                {/* Show saved values as info when no dropdown selected yet */}
+                {!selectedProvinceId &&
+                  form.getValues("student.address.province") && (
+                    <p className="text-xs text-muted-foreground bg-muted px-3 py-2 rounded-md">
+                      Alamat tersimpan sebelumnya:{" "}
+                      <strong>
+                        {form.getValues("student.address.province")}
+                      </strong>
+                      ,{" "}
+                      <strong>{form.getValues("student.address.city")}</strong>,{" "}
+                      {form.getValues("student.address.district")},{" "}
+                      {form.getValues("student.address.village")}. Pilih
+                      provinsi di atas untuk mengubah.
+                    </p>
+                  )}
               </div>
             </CardContent>
           </Card>
@@ -429,7 +665,6 @@ export function StudentBiodataForm({ initialData }: StudentBiodataFormProps) {
         {/* --- PARENTS DATA TAB --- */}
         <TabsContent value="parents">
           <div className="grid gap-6">
-            {/* Father */}
             <Card>
               <CardHeader>
                 <CardTitle>Data Ayah</CardTitle>
@@ -479,7 +714,6 @@ export function StudentBiodataForm({ initialData }: StudentBiodataFormProps) {
               </CardContent>
             </Card>
 
-            {/* Mother */}
             <Card>
               <CardHeader>
                 <CardTitle>Data Ibu</CardTitle>
@@ -572,16 +806,6 @@ export function StudentBiodataForm({ initialData }: StudentBiodataFormProps) {
           </Card>
         </TabsContent>
       </Tabs>
-
-      <div className="flex justify-end pb-8">
-        <Button size="lg" type="submit" disabled={mutation.isPending}>
-          {mutation.isPending && (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          )}
-          <Save className="mr-2 h-4 w-4" />
-          Simpan Semua Data
-        </Button>
-      </div>
     </form>
   );
 }

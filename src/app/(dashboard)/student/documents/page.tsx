@@ -16,11 +16,16 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { FileUpload } from "@/components/ui/file-upload";
 import api from "@/lib/axios";
 
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { formatCurrency } from "@/lib/utils";
+import { BANK_INFO } from "@/lib/constants";
+
 export default function DocumentPage() {
   const queryClient = useQueryClient();
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
 
-  const { data: profile, isLoading } = useQuery({
+  const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ["studentProfile"],
     queryFn: async () => {
       const response = await api.get("/student/profile");
@@ -28,6 +33,16 @@ export default function DocumentPage() {
     },
   });
 
+  const { data: settings, isLoading: settingsLoading } = useQuery({
+    queryKey: ["settings"],
+    queryFn: async () => {
+      const response = await api.get("/settings");
+      return response.data;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // ... (keeping mutation logic same) ...
   // 1. Upload File to Server
   const uploadMutation = useMutation({
     mutationFn: async ({ file, type }: { file: File; type: string }) => {
@@ -94,7 +109,7 @@ export default function DocumentPage() {
     });
   };
 
-  if (isLoading) {
+  if (profileLoading || settingsLoading) {
     return (
       <div className="flex justify-center p-8">
         <Loader2 className="animate-spin" />
@@ -104,6 +119,16 @@ export default function DocumentPage() {
 
   const registration = profile?.registration;
   const docs = registration?.documents || {};
+
+  // Calculate Fee
+  const waveName = registration?.wave || "Gelombang 1";
+  const wave = settings?.waves?.find((w: any) => w.name === waveName);
+  const totalFee = wave
+    ? (Object.values(wave.items || {}).reduce(
+        (a: any, b: any) => a + Number(b),
+        0,
+      ) as number)
+    : 0;
 
   return (
     <div className="container max-w-4xl mx-auto py-6 space-y-6">
@@ -179,16 +204,34 @@ export default function DocumentPage() {
         {/* Bukti Pembayaran */}
         <Card className="md:col-span-2 border-primary/20 bg-primary/5">
           <CardHeader>
-            <CardTitle className="text-base flex items-center justify-between">
-              Bukti Pembayaran Pendaftaran
-              {docs.paymentProof && (
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
-              )}
-            </CardTitle>
-            <CardDescription>
-              Silahkan transfer ke Bank BCA 8888-9999-00 a.n Yayasan Methodist.
-              Total: Rp 150.000
-            </CardDescription>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <CardTitle className="text-base flex items-center gap-2">
+                  Bukti Pembayaran Pendaftaran
+                  {docs.paymentProof && (
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                  )}
+                </CardTitle>
+                <CardDescription className="mt-2 text-foreground/90">
+                  Silahkan transfer sebesar{" "}
+                  <span className="font-bold text-primary">
+                    {formatCurrency(totalFee)}
+                  </span>{" "}
+                  ({waveName})
+                  <br />
+                  Ke {BANK_INFO.BANK_NAME}{" "}
+                  <span className="font-mono font-bold">
+                    {BANK_INFO.ACCOUNT_NUMBER}
+                  </span>{" "}
+                  a.n {BANK_INFO.ACCOUNT_NAME}
+                </CardDescription>
+              </div>
+              <Link href="/student/payment">
+                <Button variant="outline" size="sm">
+                  Rincian Biaya
+                </Button>
+              </Link>
+            </div>
           </CardHeader>
           <CardContent>
             <FileUpload

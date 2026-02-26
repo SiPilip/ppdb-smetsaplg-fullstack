@@ -9,18 +9,36 @@ export async function GET() {
     await dbConnect();
 
     const total = await Registration.countDocuments();
-    const pending = await Registration.countDocuments({
-      status: "pending_payment",
-    });
-    const verified = await Registration.countDocuments({ status: "verified" });
-    const paid = await Registration.countDocuments({ status: "paid" });
+    const pending = await Registration.countDocuments({ status: "pending" }); // Sudah upload/bayar
+    const verified = await Registration.countDocuments({ status: "verified" }); // Diterima
+    const rejected = await Registration.countDocuments({ status: "rejected" });
+    const draft = await Registration.countDocuments({ status: "draft" });
+
+    // Recent Registrations (Limit 5)
+    // Only fetch necessary fields: Student Name, Status, Wave, Date
+    const recent = await Registration.find()
+      .populate("userId", "name phoneNumber")
+      .select("student.fullName status wave createdAt userId")
+      .sort({ createdAt: -1 })
+      .limit(5);
+
+    // Wave Stats (Aggregation)
+    const waveStats = await Registration.aggregate([
+      { $group: { _id: "$wave", count: { $sum: 1 } } },
+      { $sort: { _id: 1 } },
+    ]);
 
     return NextResponse.json(
       {
-        total,
-        pending,
-        verified,
-        paid,
+        counts: {
+          total,
+          pending,
+          verified,
+          rejected,
+          draft,
+        },
+        recent,
+        waveStats,
       },
       { status: 200 },
     );

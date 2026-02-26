@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@radix-ui/react-label";
@@ -36,6 +37,9 @@ type RegisterForm = z.infer<typeof registerSchema>;
 
 export default function RegisterPage() {
   const router = useRouter();
+  const [isOtpSent, setIsOtpSent] = useState(false);
+  const [registeredPhone, setRegisteredPhone] = useState("");
+  const [otpCode, setOtpCode] = useState("");
 
   const {
     register,
@@ -48,7 +52,6 @@ export default function RegisterPage() {
 
   const registerMutation = useMutation({
     mutationFn: async (data: RegisterForm) => {
-      // Map form data to API expectations (fullName -> name)
       const payload = {
         name: data.fullName,
         email: data.email,
@@ -58,19 +61,17 @@ export default function RegisterPage() {
       const response = await api.post("/auth/register", payload);
       return response.data;
     },
-    onSuccess: () => {
-      toast.success("Pendaftaran berhasil! Silakan login.");
-      router.push("/login");
+    onSuccess: (data, variables) => {
+      setRegisteredPhone(variables.phoneNumber);
+      setIsOtpSent(true);
+      toast.success(data.message || "OTP terkirim! Silahkan cek WhatsApp.");
     },
     onError: (error: any) => {
       const message =
         error.response?.data?.message || "Terjadi kesalahan saat mendaftar.";
       toast.error(message);
-
-      // Handle server-side validation errors if they exist and are mapped correctly
       if (error.response?.data?.errors) {
         error.response.data.errors.forEach((err: any) => {
-          // This assumes the server returns array of issues similar to Zod
           const path = err.path[0];
           if (path) {
             setError(path as any, { message: err.message });
@@ -80,11 +81,95 @@ export default function RegisterPage() {
     },
   });
 
+  const verifyOtpMutation = useMutation({
+    mutationFn: async () => {
+      const response = await api.post("/auth/verify-otp", {
+        phoneNumber: registeredPhone,
+        otp: otpCode,
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      toast.success("Verifikasi berhasil! Silakan login.");
+      router.push("/login");
+    },
+    onError: (error: any) => {
+      const message = error.response?.data?.message || "Verifikasi gagal.";
+      toast.error(message);
+    },
+  });
+
   const onSubmit = (data: RegisterForm) => {
     registerMutation.mutate(data);
   };
 
-  const isLoading = registerMutation.isPending;
+  const onVerify = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (otpCode.length < 6) {
+      toast.error("Masukkan 6 digit kode OTP.");
+      return;
+    }
+    verifyOtpMutation.mutate();
+  };
+
+  const isLoading = registerMutation.isPending || verifyOtpMutation.isPending;
+
+  if (isOtpSent) {
+    return (
+      <>
+        <div className="flex flex-col space-y-2 text-left">
+          <h1 className="text-3xl font-bold tracking-tight text-white dark:text-gray-100">
+            Verifikasi OTP
+          </h1>
+          <p className="text-sm text-white dark:text-gray-400">
+            Masukkan 6 digit kode yang dikirim ke WhatsApp{" "}
+            <strong>{registeredPhone}</strong>
+          </p>
+        </div>
+
+        <div className="grid gap-6">
+          <form onSubmit={onVerify} className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="otp" className="sr-only">
+                Kode OTP
+              </Label>
+              <Input
+                id="otp"
+                placeholder="Masukkan Kode OTP (contoh: 123456)"
+                value={otpCode}
+                onChange={(e) =>
+                  setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                }
+                className="h-12 text-center text-lg tracking-widest bg-white text-black"
+                maxLength={6}
+                disabled={isLoading}
+              />
+            </div>
+
+            <Button
+              type="submit"
+              disabled={isLoading}
+              className="w-full h-11 bg-green-600 hover:bg-green-700 text-white font-medium"
+            >
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Verifikasi Akun
+            </Button>
+
+            <p className="text-xs text-center text-white/80">
+              Salah nomor?{" "}
+              <button
+                type="button"
+                onClick={() => setIsOtpSent(false)}
+                className="underline hover:text-white"
+              >
+                Kembali
+              </button>
+            </p>
+          </form>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>

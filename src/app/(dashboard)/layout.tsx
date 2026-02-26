@@ -14,8 +14,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,6 +33,12 @@ const sidebarItems = [
   { href: "/student/biodata", label: "Biodata Siswa", icon: User },
   { href: "/student/documents", label: "Dokumen", icon: FileText },
   { href: "/student/settings", label: "Pengaturan", icon: Settings },
+];
+
+const adminSidebarItems = [
+  { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/admin/verifications", label: "Verifikasi", icon: FileText },
+  { href: "/admin/settings", label: "Pengaturan", icon: Settings },
 ];
 
 export default function DashboardLayout({
@@ -94,7 +102,10 @@ function SidebarContent({ pathname }: { pathname: string }) {
       </div>
       <div className="flex-1 overflow-auto py-2">
         <nav className="grid items-start px-4 text-sm font-medium">
-          {sidebarItems.map((item, index) => {
+          {(pathname.startsWith("/admin")
+            ? adminSidebarItems
+            : sidebarItems
+          ).map((item, index) => {
             const isActive =
               pathname === item.href || pathname.startsWith(item.href + "/");
             return (
@@ -128,36 +139,89 @@ function SidebarContent({ pathname }: { pathname: string }) {
 }
 
 function UserNav() {
+  const pathname = usePathname();
+
+  // Detect role from current path
+  const isAdmin = pathname.startsWith("/admin");
+  const settingsHref = isAdmin ? "/admin/settings" : "/student/settings";
+  const profileHref = isAdmin ? "/admin/settings" : "/student/biodata";
+
+  // Fetch current user
+  const { data: user } = useQuery({
+    queryKey: ["me"],
+    queryFn: async () => {
+      const res = await fetch("/api/auth/me");
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.user;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      window.location.href = "/login";
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
+  };
+
+  // Generate initials from name
+  const initials = user?.name
+    ? user.name
+        .split(" ")
+        .slice(0, 2)
+        .map((w: string) => w[0])
+        .join("")
+        .toUpperCase()
+    : "??";
+
+  const roleLabel = user?.role === "admin" ? "Administrator" : "Siswa";
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-          <Avatar className="h-8 w-8">
-            <AvatarImage src="/avatars/01.png" alt="@user" />
-            <AvatarFallback>SC</AvatarFallback>
+        <Button variant="ghost" className="relative h-9 w-9 rounded-full">
+          <Avatar className="h-9 w-9">
+            <AvatarFallback className="bg-primary text-primary-foreground font-semibold text-sm">
+              {initials}
+            </AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">Siswa Calon</p>
-            <p className="text-xs leading-none text-muted-foreground">
-              siswa@example.com
+            <p className="text-sm font-medium leading-none">
+              {user?.name ?? "..."}
             </p>
+            <p className="text-xs leading-none text-muted-foreground truncate">
+              {user?.email ?? ""}
+            </p>
+            <span className="text-xs text-primary font-medium mt-0.5">
+              {roleLabel}
+            </span>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem>
-          <User className="mr-2 h-4 w-4" />
-          <span>Profil</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem>
-          <Settings className="mr-2 h-4 w-4" />
-          <span>Pengaturan</span>
-        </DropdownMenuItem>
+        <Link href={profileHref}>
+          <DropdownMenuItem className="cursor-pointer">
+            <User className="mr-2 h-4 w-4" />
+            <span>Profil / Biodata</span>
+          </DropdownMenuItem>
+        </Link>
+        <Link href={settingsHref}>
+          <DropdownMenuItem className="cursor-pointer">
+            <Settings className="mr-2 h-4 w-4" />
+            <span>Pengaturan</span>
+          </DropdownMenuItem>
+        </Link>
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="text-destructive focus:bg-destructive/10">
+        <DropdownMenuItem
+          className="text-destructive focus:bg-destructive/10 cursor-pointer"
+          onClick={handleLogout}
+        >
           <LogOut className="mr-2 h-4 w-4" />
           <span>Log out</span>
         </DropdownMenuItem>
