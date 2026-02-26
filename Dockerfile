@@ -32,7 +32,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
 # Build Next.js (menghasilkan .next/standalone)
-RUN npm run build
+RUN NODE_OPTIONS="--max-old-space-size=2042" npm run build
 
 # ============================================================
 # Stage 3: Production image (sekecil mungkin)
