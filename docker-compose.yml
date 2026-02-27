@@ -86,6 +86,8 @@ services:
       # Untuk SSL nanti (Let's Encrypt)
       - certbot_certs:/etc/letsencrypt:ro
       - certbot_www:/var/www/certbot:ro
+      # Serve file upload langsung dari Nginx (tanpa lewat Next.js)
+      - uploads_data:/var/www/uploads:ro
     networks:
       - app_network
     depends_on:
