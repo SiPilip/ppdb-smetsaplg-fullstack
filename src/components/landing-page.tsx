@@ -301,7 +301,7 @@ function Navbar() {
           {/* CTA + Hamburger */}
           <div className="flex items-center gap-3">
             <Link
-              href="/daftar"
+              href="/login"
               className="hidden sm:inline-flex items-center gap-2 bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400 text-slate-900 font-bold px-4 py-2 md:px-5 md:py-2.5 rounded-full text-sm shadow-lg hover:shadow-xl transition-all duration-200 hover:-translate-y-0.5"
             >
               <Sparkles className="w-4 h-4" />
@@ -344,7 +344,7 @@ function Navbar() {
                 </a>
               ))}
               <Link
-                href="/daftar"
+                href="/login"
                 className="flex items-center justify-center gap-2 mt-3 bg-gradient-to-r from-yellow-400 to-amber-500 text-slate-900 font-bold px-4 py-3 rounded-xl text-sm"
               >
                 <Sparkles className="w-4 h-4" />
@@ -433,7 +433,7 @@ function HeroSection() {
           className="flex flex-col sm:flex-row items-center justify-center gap-4"
         >
           <Link
-            href="/daftar"
+            href="/login"
             className="group inline-flex items-center gap-3 bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400 text-slate-900 font-black px-8 py-4 rounded-2xl text-lg shadow-2xl hover:shadow-yellow-400/30 transition-all duration-200 hover:-translate-y-1"
           >
             <GraduationCap className="w-6 h-6" />
@@ -708,7 +708,7 @@ function PosterSection() {
 
             <div className="flex flex-col sm:flex-row gap-4">
               <Link
-                href="/daftar"
+                href="/login"
                 className="group inline-flex items-center justify-center gap-2 bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400 text-slate-900 font-black px-7 py-4 rounded-2xl shadow-xl hover:shadow-yellow-400/30 transition-all duration-200 hover:-translate-y-1"
               >
                 Daftar Sekarang
@@ -1089,7 +1089,7 @@ function RequirementsSection() {
               secara online.
             </p>
             <Link
-              href="/daftar"
+              href="/login"
               className="group inline-flex items-center gap-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold px-7 py-4 rounded-2xl shadow-xl shadow-blue-500/30 transition-all duration-200 hover:-translate-y-1"
             >
               Mulai Pendaftaran
@@ -1251,7 +1251,7 @@ function ContactSection() {
             habis!
           </p>
           <Link
-            href="/daftar"
+            href="/login"
             className="group inline-flex items-center gap-3 bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400 text-slate-900 font-black px-8 py-4 rounded-2xl text-lg shadow-2xl hover:shadow-yellow-400/30 transition-all duration-200 hover:-translate-y-1"
           >
             <Sparkles className="w-6 h-6" />
