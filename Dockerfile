@@ -11,7 +11,7 @@ WORKDIR /app
 # Copy package files
 COPY package.json package-lock.json ./
 
-# Install HANYA production dependencies
+# Install SEMUA dependencies (termasuk devDeps untuk TypeScript compiler)
 RUN npm ci
 
 # ============================================================
@@ -27,9 +27,15 @@ COPY --from=deps /app/node_modules ./node_modules
 # Copy semua source code
 COPY . .
 
-# Set env untuk build (nilai placeholder, env asli di runtime)
+# Env yang dibutuhkan saat BUILD TIME
+# Nilai dummy - nilai asli di-inject via docker-compose ENV saat runtime
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+
+# NEXT_PUBLIC_* harus ada saat build (Next.js embed ke bundle)
+# Nilai akan di-override di runtime via container env
+ARG NEXT_PUBLIC_APP_URL=http://placeholder
+ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 
 # Build Next.js (menghasilkan .next/standalone)
 RUN npm run build
