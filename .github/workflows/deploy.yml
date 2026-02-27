@@ -82,7 +82,7 @@ jobs:
             set -e
 
             echo "📂 Masuk ke direktori project..."
-            cd ~/ppdb-smetsaplg
+            cd ~/ppdb-smetsaplg-fullstack
 
             echo "⬇️  Pull kode terbaru..."
             git pull origin master
