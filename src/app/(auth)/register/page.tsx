@@ -8,7 +8,16 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@radix-ui/react-label";
-import { Loader2, User, Mail, Phone, Lock, Key } from "lucide-react";
+import {
+  Loader2,
+  User,
+  Mail,
+  Phone,
+  Lock,
+  Key,
+  GraduationCap,
+  ShieldCheck,
+} from "lucide-react";
 import toast from "react-hot-toast";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
@@ -35,6 +44,142 @@ const registerSchema = z
 
 type RegisterForm = z.infer<typeof registerSchema>;
 
+// ─── Reusable field ───────────────────────────────────────────────────────────
+function Field({
+  label,
+  htmlFor,
+  icon: Icon,
+  error,
+  children,
+}: {
+  label: string;
+  htmlFor: string;
+  icon: React.ElementType;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label
+        htmlFor={htmlFor}
+        className="text-white/80 text-sm font-medium block"
+      >
+        {label}
+      </Label>
+      <div className="relative">
+        <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+          <Icon className="h-4 w-4 text-blue-300" />
+        </div>
+        {children}
+      </div>
+      {error && <p className="text-xs text-red-300 ml-1">{error}</p>}
+    </div>
+  );
+}
+
+const inputCls = (hasError?: boolean) =>
+  `pl-10 h-12 text-sm bg-white border text-slate-900 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-0 rounded-xl ${
+    hasError
+      ? "border-red-400 bg-red-50"
+      : "border-white/30 focus:border-blue-400"
+  }`;
+
+// ─── OTP Screen ───────────────────────────────────────────────────────────────
+function OtpScreen({
+  phone,
+  otpCode,
+  onOtpChange,
+  onVerify,
+  onBack,
+  isLoading,
+}: {
+  phone: string;
+  otpCode: string;
+  onOtpChange: (v: string) => void;
+  onVerify: (e: React.FormEvent) => void;
+  onBack: () => void;
+  isLoading: boolean;
+}) {
+  return (
+    <div className="w-full space-y-6">
+      {/* Header */}
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-2.5 mb-4">
+          <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center shadow-lg shrink-0">
+            <ShieldCheck className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <p className="text-white/60 text-xs font-medium uppercase tracking-widest">
+              Verifikasi Akun
+            </p>
+            <p className="text-yellow-300 text-xs font-semibold">
+              Cek WhatsApp Anda
+            </p>
+          </div>
+        </div>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+          Masukkan Kode OTP
+        </h1>
+        <p className="text-sm text-white/70 leading-relaxed">
+          Kode 6 digit telah dikirim ke{" "}
+          <span className="text-white font-semibold">{phone}</span> via
+          WhatsApp.
+        </p>
+      </div>
+
+      <form onSubmit={onVerify} className="space-y-4">
+        <div className="space-y-1.5">
+          <Label
+            htmlFor="otp"
+            className="text-white/80 text-sm font-medium block"
+          >
+            Kode OTP
+          </Label>
+          <Input
+            id="otp"
+            placeholder="• • • • • •"
+            value={otpCode}
+            onChange={(e) =>
+              onOtpChange(e.target.value.replace(/\D/g, "").slice(0, 6))
+            }
+            className="h-16 text-center text-3xl tracking-[0.5em] font-black bg-white/10 border border-white/20 text-white placeholder:text-white/20 rounded-xl focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-0"
+            maxLength={6}
+            inputMode="numeric"
+            disabled={isLoading}
+          />
+          <p className="text-xs text-white/50 text-center">
+            {otpCode.length}/6 digit
+          </p>
+        </div>
+
+        <Button
+          type="submit"
+          disabled={isLoading || otpCode.length < 6}
+          className="w-full h-12 bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-sm shadow-lg shadow-emerald-900/40 transition-all hover:shadow-xl rounded-xl disabled:opacity-50"
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Memverifikasi...
+            </>
+          ) : (
+            "✓ Verifikasi Akun"
+          )}
+        </Button>
+
+        <button
+          type="button"
+          onClick={onBack}
+          className="w-full text-center text-sm text-white/50 hover:text-white/80 transition-colors py-2"
+        >
+          ← Salah nomor? Kembali
+        </button>
+      </form>
+    </div>
+  );
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
 export default function RegisterPage() {
   const router = useRouter();
   const [isOtpSent, setIsOtpSent] = useState(false);
@@ -114,248 +259,167 @@ export default function RegisterPage() {
 
   const isLoading = registerMutation.isPending || verifyOtpMutation.isPending;
 
+  // ── OTP screen
   if (isOtpSent) {
     return (
-      <>
-        <div className="flex flex-col space-y-2 text-left">
-          <h1 className="text-3xl font-bold tracking-tight text-white dark:text-gray-100">
-            Verifikasi OTP
-          </h1>
-          <p className="text-sm text-white dark:text-gray-400">
-            Masukkan 6 digit kode yang dikirim ke WhatsApp{" "}
-            <strong>{registeredPhone}</strong>
-          </p>
-        </div>
-
-        <div className="grid gap-6">
-          <form onSubmit={onVerify} className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="otp" className="sr-only">
-                Kode OTP
-              </Label>
-              <Input
-                id="otp"
-                placeholder="Masukkan Kode OTP (contoh: 123456)"
-                value={otpCode}
-                onChange={(e) =>
-                  setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))
-                }
-                className="h-12 text-center text-lg tracking-widest bg-white text-black"
-                maxLength={6}
-                disabled={isLoading}
-              />
-            </div>
-
-            <Button
-              type="submit"
-              disabled={isLoading}
-              className="w-full h-11 bg-green-600 hover:bg-green-700 text-white font-medium"
-            >
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Verifikasi Akun
-            </Button>
-
-            <p className="text-xs text-center text-white/80">
-              Salah nomor?{" "}
-              <button
-                type="button"
-                onClick={() => setIsOtpSent(false)}
-                className="underline hover:text-white"
-              >
-                Kembali
-              </button>
-            </p>
-          </form>
-        </div>
-      </>
+      <OtpScreen
+        phone={registeredPhone}
+        otpCode={otpCode}
+        onOtpChange={setOtpCode}
+        onVerify={onVerify}
+        onBack={() => setIsOtpSent(false)}
+        isLoading={isLoading}
+      />
     );
   }
 
+  // ── Registration form
   return (
-    <>
-      <div className="flex flex-col space-y-2 text-left">
-        <h1 className="text-3xl font-bold tracking-tight text-white dark:text-gray-100">
+    <div className="w-full space-y-5">
+      {/* Header */}
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-2.5 mb-4">
+          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shrink-0">
+            <GraduationCap className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <p className="text-white/60 text-xs font-medium uppercase tracking-widest">
+              PPDB Online
+            </p>
+            <p className="text-yellow-300 text-xs font-semibold">
+              SMA Methodist 1 Palembang
+            </p>
+          </div>
+        </div>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
           Buat Akun Baru
         </h1>
-        <p className="text-sm text-white dark:text-gray-400">
-          Bergabunglah dengan komunitas kami untuk memulai
+        <p className="text-sm text-white/70 leading-relaxed">
+          Daftarkan diri Anda untuk memulai proses PPDB secara online.
         </p>
       </div>
 
-      <div className="grid gap-6">
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <div className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="fullName" className="sr-only">
-                Nama Lengkap Siswa
-              </Label>
-              <div className="relative">
-                <div className="absolute left-3 top-3 text-white z-10">
-                  <User className="h-5 w-5 text-blue-950 z-10" />
-                </div>
-                <Input
-                  id="fullName"
-                  placeholder="Nama Lengkap Siswa"
-                  disabled={isLoading}
-                  {...register("fullName")}
-                  className={`pl-10 h-11 bg-white text-white ${
-                    errors.fullName
-                      ? "border-destructive focus-visible:ring-destructive bg-red-50"
-                      : "border-gray-200 focus-visible:ring-blue-600"
-                  }`}
-                />
-              </div>
-              {errors.fullName && (
-                <p className="text-xs text-destructive ml-1">
-                  {errors.fullName.message}
-                </p>
-              )}
-            </div>
+      {/* Form */}
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-3.5">
+        {/* Nama Lengkap */}
+        <Field
+          label="Nama Lengkap Siswa"
+          htmlFor="fullName"
+          icon={User}
+          error={errors.fullName?.message}
+        >
+          <Input
+            id="fullName"
+            placeholder="Nama Lengkap Siswa"
+            disabled={isLoading}
+            autoComplete="name"
+            {...register("fullName")}
+            className={inputCls(!!errors.fullName)}
+          />
+        </Field>
 
-            <div className="grid gap-2">
-              <Label htmlFor="email" className="sr-only">
-                Email
-              </Label>
-              <div className="relative">
-                <div className="absolute left-3 top-3 text-white z-10">
-                  <Mail className="h-5 w-5 text-blue-950 z-10" />
-                </div>
-                <Input
-                  id="email"
-                  placeholder="nama@contoh.com"
-                  type="email"
-                  disabled={isLoading}
-                  {...register("email")}
-                  className={`pl-10 h-11 bg-white text-white ${
-                    errors.email
-                      ? "border-destructive focus-visible:ring-destructive bg-red-50"
-                      : "border-gray-200 focus-visible:ring-blue-600"
-                  }`}
-                />
-              </div>
-              {errors.email && (
-                <p className="text-xs text-destructive ml-1">
-                  {errors.email.message}
-                </p>
-              )}
-            </div>
+        {/* Email */}
+        <Field
+          label="Email"
+          htmlFor="email"
+          icon={Mail}
+          error={errors.email?.message}
+        >
+          <Input
+            id="email"
+            placeholder="nama@contoh.com"
+            type="email"
+            disabled={isLoading}
+            autoComplete="email"
+            {...register("email")}
+            className={inputCls(!!errors.email)}
+          />
+        </Field>
 
-            <div className="grid gap-2">
-              <Label htmlFor="phoneNumber" className="sr-only">
-                Nomor WhatsApp
-              </Label>
-              <div className="relative">
-                <div className="absolute left-3 top-3 text-white z-10">
-                  <Phone className="h-5 w-5 text-blue-950 z-10" />
-                </div>
-                <Input
-                  id="phoneNumber"
-                  placeholder="Nomor WhatsApp (08...)"
-                  type="tel"
-                  disabled={isLoading}
-                  {...register("phoneNumber")}
-                  className={`pl-10 h-11 bg-white text-white ${
-                    errors.phoneNumber
-                      ? "border-destructive focus-visible:ring-destructive bg-red-50"
-                      : "border-gray-200 focus-visible:ring-blue-600"
-                  }`}
-                />
-              </div>
-              {errors.phoneNumber && (
-                <p className="text-xs text-destructive ml-1">
-                  {errors.phoneNumber.message}
-                </p>
-              )}
-            </div>
+        {/* Nomor WA */}
+        <Field
+          label="Nomor WhatsApp Aktif"
+          htmlFor="phoneNumber"
+          icon={Phone}
+          error={errors.phoneNumber?.message}
+        >
+          <Input
+            id="phoneNumber"
+            placeholder="08xxxxxxxxxx"
+            type="tel"
+            inputMode="tel"
+            disabled={isLoading}
+            autoComplete="tel"
+            {...register("phoneNumber")}
+            className={inputCls(!!errors.phoneNumber)}
+          />
+        </Field>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="grid gap-2">
-                <Label htmlFor="password" className="sr-only">
-                  Password
-                </Label>
-                <div className="relative">
-                  <div className="absolute left-3 top-3 text-white z-10">
-                    <Lock className="h-5 w-5 text-blue-950 z-10" />
-                  </div>
-                  <Input
-                    id="password"
-                    placeholder="Password"
-                    type="password"
-                    disabled={isLoading}
-                    {...register("password")}
-                    className={`pl-10 h-11 bg-white text-white ${
-                      errors.password
-                        ? "border-destructive focus-visible:ring-destructive bg-red-50"
-                        : "border-gray-200 focus-visible:ring-blue-600"
-                    }`}
-                  />
-                </div>
-                {errors.password && (
-                  <p className="text-xs text-destructive ml-1">
-                    {errors.password.message}
-                  </p>
-                )}
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="confirmPassword" className="sr-only">
-                  Ulangi Password
-                </Label>
-                <div className="relative">
-                  <div className="absolute left-3 top-3 text-white z-10">
-                    <Key className="h-5 w-5 text-blue-950 z-10" />
-                  </div>
-                  <Input
-                    id="confirmPassword"
-                    placeholder="Ulangi Password"
-                    type="password"
-                    disabled={isLoading}
-                    {...register("confirmPassword")}
-                    className={`pl-10 h-11 bg-white text-white ${
-                      errors.confirmPassword
-                        ? "border-destructive focus-visible:ring-destructive bg-red-50"
-                        : "border-gray-200 focus-visible:ring-blue-600"
-                    }`}
-                  />
-                </div>
-                {errors.confirmPassword && (
-                  <p className="text-xs text-destructive ml-1">
-                    {errors.confirmPassword.message}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <Button
+        {/* Password & Konfirmasi — stack di mobile, 2-col di md+ */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          <Field
+            label="Password"
+            htmlFor="password"
+            icon={Lock}
+            error={errors.password?.message}
+          >
+            <Input
+              id="password"
+              placeholder="Min. 6 karakter"
+              type="password"
               disabled={isLoading}
-              className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-md transition-all hover:shadow-lg mt-2"
-            >
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Daftar Sekarang
-            </Button>
-          </div>
-        </form>
+              autoComplete="new-password"
+              {...register("password")}
+              className={inputCls(!!errors.password)}
+            />
+          </Field>
 
-        <div className="relative flex items-center">
-          <div className="w-full flex items-center">
-            <span className="w-full border-t border-gray-200 dark:border-gray-800" />
-          </div>
-          <div className="relative flex justify-center text-xs uppercase w-full text-nowrap">
-            <span className="text-white dark:bg-zinc-950 px-2">
-              Sudah punya akun?
-            </span>
-          </div>
-          <div className="w-full flex items-center">
-            <span className="w-full border-t border-gray-200 dark:border-gray-800" />
-          </div>
+          <Field
+            label="Ulangi Password"
+            htmlFor="confirmPassword"
+            icon={Key}
+            error={errors.confirmPassword?.message}
+          >
+            <Input
+              id="confirmPassword"
+              placeholder="Ulangi password"
+              type="password"
+              disabled={isLoading}
+              autoComplete="new-password"
+              {...register("confirmPassword")}
+              className={inputCls(!!errors.confirmPassword)}
+            />
+          </Field>
         </div>
 
-        <Link
-          href="/login"
-          className="inline-flex h-11 items-center justify-center rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-zinc-900 px-8 text-sm font-medium shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-zinc-800 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-600 disabled:pointer-events-none disabled:opacity-50"
+        <Button
+          disabled={isLoading}
+          className="w-full h-12 bg-blue-500 hover:bg-blue-400 text-white font-bold text-sm shadow-lg shadow-blue-900/40 transition-all hover:shadow-xl rounded-xl"
         >
-          Masuk ke Akun
-        </Link>
+          {isLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Mendaftarkan...
+            </>
+          ) : (
+            "Daftar Sekarang →"
+          )}
+        </Button>
+      </form>
+
+      {/* Divider + login link */}
+      <div className="flex items-center gap-3">
+        <span className="flex-1 border-t border-white/20" />
+        <span className="text-white/50 text-xs">Sudah punya akun?</span>
+        <span className="flex-1 border-t border-white/20" />
       </div>
-    </>
+
+      <Link
+        href="/login"
+        className="flex h-12 items-center justify-center rounded-xl border border-white/25 bg-white/10 text-white text-sm font-semibold hover:bg-white/20 transition-all duration-200 active:scale-95"
+      >
+        Masuk ke Akun
+      </Link>
+    </div>
   );
 }
