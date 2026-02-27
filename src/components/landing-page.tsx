@@ -737,7 +737,7 @@ function PosterSection() {
               <div className="absolute -inset-4 bg-gradient-to-br from-yellow-400/30 to-blue-500/20 rounded-3xl blur-2xl" />
               <div className="relative rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10">
                 <Image
-                  src="/img/poster-ppdb.png"
+                  src="/img/poster-ppdb2.png"
                   alt="Poster PPDB 2025/2026 SMA Methodist 1 Palembang"
                   width={480}
                   height={680}
