@@ -33,9 +33,10 @@ services:
   # Next.js App
   # ─────────────────────────────────────────────
   nextjs:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    # Image diambil dari GitHub Container Registry (dibangun oleh CI/CD)
+    # Format: ghcr.io/<github_username>/ppdb-smetsaplg:latest
+    image: ${NEXTJS_IMAGE:-ghcr.io/SiPilip/ppdb-smetsaplg-fullstack:latest}
+    pull_policy: always # Selalu pakai image terbaru
     container_name: ppdb_nextjs
     restart: unless-stopped
     # TIDAK expose port ke host – hanya lewat Nginx

@@ -1,45 +1,103 @@
-name: 🚀 Deploy to VPS
+name: 🚀 Build & Deploy to VPS
 
 on:
   push:
     branches:
-      - main # Auto-deploy setiap push ke branch main
+      - master
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/ppdb-smetsaplg
 
 jobs:
-  deploy:
-    name: Deploy via SSH
+  # ─────────────────────────────────────────────────────────
+  # JOB 1: Build Docker image di GitHub Actions (RAM 7GB!)
+  # lalu push ke GitHub Container Registry (gratis)
+  # ─────────────────────────────────────────────────────────
+  build:
+    name: 🔨 Build & Push Image
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # Izin push ke GHCR
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
 
     steps:
-      # ── 1. Checkout kode ─────────────────────────────────
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. SSH ke VPS & Deploy ───────────────────────────
-      - name: 🐳 Deploy to VPS
+      - name: 🔐 Login ke GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🏷️ Generate image tags & labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest
+
+      - name: ⚡ Setup Docker Buildx (build cache)
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🐳 Build & Push image ke GHCR
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Cache agar build berikutnya lebih cepat
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            NEXT_TELEMETRY_DISABLED=1
+
+  # ─────────────────────────────────────────────────────────
+  # JOB 2: Deploy ke VPS - hanya PULL image, tidak build!
+  # ─────────────────────────────────────────────────────────
+  deploy:
+    name: 🚀 Deploy ke VPS
+    runs-on: ubuntu-latest
+    needs: build # Tunggu job build selesai dulu
+
+    steps:
+      - name: 🚀 SSH ke VPS & Pull image terbaru
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
+          # Timeout lebih panjang untuk docker pull
+          command_timeout: 10m
           script: |
-            set -e  # Stop jika ada error
+            set -e
 
             echo "📂 Masuk ke direktori project..."
             cd ~/ppdb-smetsaplg
 
-            echo "⬇️  Pull kode terbaru dari main..."
+            echo "⬇️  Pull kode terbaru..."
             git pull origin master
 
-            echo "🔨 Build ulang container Next.js..."
-            docker compose --env-file .env.production up -d --build nextjs
+            echo "🔐 Login ke GitHub Container Registry..."
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            echo "🧹 Cleanup Docker images lama..."
+            echo "📦 Pull image terbaru dari GHCR..."
+            docker pull ghcr.io/${{ env.IMAGE_NAME }}:latest
+
+            echo "♻️  Restart container dengan image baru..."
+            docker compose --env-file .env.production up -d --no-build
+
+            echo "🧹 Cleanup images lama..."
             docker image prune -f
 
             echo "✅ Deploy selesai!"
             docker compose ps
-
-  # ── Optional: Notifikasi status deploy ───────────────────
-  # (Bisa ditambahkan Slack/email notification di sini nanti)
